@@ -24,6 +24,9 @@ const int PHz = 250;
 const int Pcyc = 1000000/PHz;
 const float pwmbit = 4095 /Pcyc;
 
+float calib_ax;
+float calib_ay;
+float calib_az;
 
 rcl_publisher_t publisher_imu;
 rcl_publisher_t publisher_mag;
@@ -75,26 +78,31 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     if(IMU.accelerationAvailable())
     {
       IMU.readAcceleration(ax,ay,az);
+      ax = ax*9.81 + calib_ax;
+      ay = ay*9.81 + calib_ay;
+      az = az*9.81 + calib_az;
+//      ax = ax*9.81;
+//      ay = ay*9.81;
+//      az = az*9.81;
     }
     if(IMU.gyroscopeAvailable())
     {
       IMU.readGyroscope(gx, gy, gz);
+      gx = gx*3.142/180;
+      gy = gy*3.142/180;
+      gz = gz*3.142/180;
     }
     if(IMU.magneticFieldAvailable())
     {
       IMU.readMagneticField(mx, my, mz);
     }
     
-    ax = ax*9.81;
-    ay = ay*9.81;
-    az = az*9.81;
+    
     msg_imu.linear_acceleration.x = ax;
     msg_imu.linear_acceleration.y = ay;
     msg_imu.linear_acceleration.z = az;
 
-    gx = gx*3.142/180;
-    gy = gy*3.142/180;
-    gz = gz*3.142/180;
+    
     msg_imu.angular_velocity.x = gx;
     msg_imu.angular_velocity.y = gy;
     msg_imu.angular_velocity.z = gz;
@@ -115,9 +123,35 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH);
  
-  
+  /////////////////////////////////////calibration accele
   IMU.begin();
 
+  delay(5000);
+  float ax, ay, az;
+  float buffer_ax=0;
+  float buffer_ay=0;
+  float buffer_az=0;
+  for(int i=0;i<10000;i++){
+    if(IMU.accelerationAvailable())
+    {
+      IMU.readAcceleration(ax,ay,az);
+      ax = ax*9.81;
+      ay = ay*9.81;
+      az = az*9.81;
+    }
+    buffer_ax +=  ax;
+    buffer_ay +=  ay;
+    buffer_az +=  az;
+    delay(1);
+  }
+  
+  calib_ax = 0.0-buffer_ax/10000;
+  calib_ay = 0.0-buffer_ay/10000;
+  calib_az = 9.81-buffer_az/10000;
+
+//  if(calib_ax > 20){calib_ax = 0;}
+//  if(calib_ay > 20){calib_ay = 0;}
+//  if(calib_az > 20){calib_az = 0;}
   
   
   delay(3000);
