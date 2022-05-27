@@ -8,6 +8,7 @@
 #include <sensor_msgs/msg/imu.h>
 #include <sensor_msgs/msg/magnetic_field.h>
 #include <std_msgs/msg/int32.h>
+#include <sensor_msgs/msg/joy.h>
 
 #include <Arduino_LSM9DS1.h>
 
@@ -23,18 +24,20 @@
 const int PHz = 250;
 const int Pcyc = 1000000/PHz;
 const float pwmbit = 4095 /Pcyc;
+bool motor_flag = true;
 
 float calib_ax;
 float calib_ay;
 float calib_az;
 
+float pwmcmd = 1100;
+
 rcl_publisher_t publisher_imu;
 rcl_publisher_t publisher_mag;
 
-rcl_subscription_t pwm_subscriber;
+rcl_subscription_t joy_subscriber;
 
 rclc_executor_t executor;
-rclc_executor_t motor_executor;
 
 rclc_support_t support;
 
@@ -46,7 +49,7 @@ rcl_timer_t timer;
 
 sensor_msgs__msg__Imu msg_imu;
 sensor_msgs__msg__MagneticField msg_mag;
-std_msgs__msg__Int32 msg;
+sensor_msgs__msg__Joy joy_msg;
 
 //char debagc;
 void error_loop(){
@@ -61,17 +64,30 @@ void error_loop(){
 
 void motor_callback(const void * msgin)
 {
-  const std_msgs__msg__Int32 * msg = (const std_msgs__msg__Int32 *)msgin;
-  //analogWrite(MOTOR0_PIN, 1100*pwmbit);
-  
+  const sensor_msgs__msg__Joy * msg = (const sensor_msgs__msg__Joy *)msgin;
+  if((msg->buttons.data[1])== 1){
+     motor_flag = false;
+    }
+  if((msg->buttons.data[2])== 1){
+     motor_flag = true;
+    }
+  pwmcmd = 2000*( msg->axes.data[1]) + 1100;
 }
 
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {  
-  analogWrite(MOTOR0_PIN, 1100*pwmbit);
-  analogWrite(MOTOR1_PIN, 1100*pwmbit);
-  analogWrite(MOTOR2_PIN, 1100*pwmbit);
-  analogWrite(MOTOR3_PIN, 1100*pwmbit);
+  if(motor_flag){
+    analogWrite(MOTOR0_PIN, pwmcmd*pwmbit);
+    analogWrite(MOTOR1_PIN, pwmcmd*pwmbit);
+    analogWrite(MOTOR2_PIN, pwmcmd*pwmbit);
+    analogWrite(MOTOR3_PIN, pwmcmd*pwmbit);
+  }else{
+    analogWrite(MOTOR0_PIN, 0*pwmbit);
+    analogWrite(MOTOR1_PIN, 0*pwmbit);
+    analogWrite(MOTOR2_PIN, 0*pwmbit);
+    analogWrite(MOTOR3_PIN, 0*pwmbit);
+  }
+
   float ax, ay, az, gx, gy, gz, mx, my, mz;
   RCLC_UNUSED(last_call_time);
   if (timer != NULL){
@@ -177,7 +193,14 @@ void setup() {
   ////////////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////////////////////
   allocator = rcl_get_default_allocator();
-  
+
+  static int buttons_memory[14];
+  joy_msg.buttons.capacity = 14;
+  joy_msg.buttons.data = buttons_memory;
+
+  static float axes_memory[8];
+  joy_msg.axes.capacity = axes_memory;
+  joy_msg.axes.data = axes_memory;
 //  debagc = 'a';
 //  
 //  Serial.println("a");
@@ -206,14 +229,14 @@ void setup() {
     ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, MagneticField),
     "/copto/mag"));
 
-
   // create subscriber
-  pwm_subscriber = rcl_get_zero_initialized_subscription();
+  const char * topic_name = "/joy";
+  joy_subscriber = rcl_get_zero_initialized_subscription();
   RCCHECK(rclc_subscription_init_default(
-    &pwm_subscriber,
+    &joy_subscriber,
     &node,
-    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-    "/copto/motor0_pwm"));
+    ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Joy),
+    topic_name));
 
 //  Serial.println("e");
 //  debagc = 'e';
@@ -231,15 +254,11 @@ void setup() {
   executor = rclc_executor_get_zero_initialized_executor();
   RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
   RCCHECK(rclc_executor_add_timer(&executor, &timer));
-
-  motor_executor = rclc_executor_get_zero_initialized_executor();
-  RCCHECK(rclc_executor_init(&motor_executor, &support.context, 2, &allocator));
-  RCCHECK(rclc_executor_add_subscription(&motor_executor, &pwm_subscriber, &msg, &motor_callback, ON_NEW_DATA));
+  RCCHECK(rclc_executor_add_subscription(&executor, &joy_subscriber, &joy_msg, &motor_callback, ON_NEW_DATA));  
 }
 
 void loop() {
   RCSOFTCHECK(rclc_executor_spin(&executor));
-  RCSOFTCHECK(rclc_executor_spin(&motor_executor));
 //  Serial.println("c");
   //analogWrite(MOTOR0_PIN, 1100*pwmbit);
 }
