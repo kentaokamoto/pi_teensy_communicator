@@ -26,9 +26,9 @@ const int Pcyc = 1000000/PHz;
 const float pwmbit = 4095 /Pcyc;
 bool motor_flag = true;
 
-float calib_ax;
-float calib_ay;
-float calib_az;
+float calib_ax; float calib_ay; float calib_az;
+
+float calib_gx; float calib_gy; float calib_gz;
 
 float pwmcmd = 1100;
 
@@ -94,9 +94,9 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     if(IMU.accelerationAvailable())
     {
       IMU.readAcceleration(ax,ay,az);
-      ax = ax*9.81 + calib_ax;
+      ax = -(ax*9.81 + calib_ax);
       ay = ay*9.81 + calib_ay;
-      az = az*9.81 + calib_az;
+      az = -(az*9.81 + calib_az);
 //      ax = ax*9.81;
 //      ay = ay*9.81;
 //      az = az*9.81;
@@ -104,13 +104,16 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     if(IMU.gyroscopeAvailable())
     {
       IMU.readGyroscope(gx, gy, gz);
-      gx = gx*3.142/180;
-      gy = gy*3.142/180;
-      gz = gz*3.142/180;
+      gx = gx*3.142/180 + calib_gx;
+      gy = -(gy*3.142/180 + calib_gy);
+      gz = gz*3.142/180 + calib_gz;
     }
     if(IMU.magneticFieldAvailable())
     {
       IMU.readMagneticField(mx, my, mz);
+      mx = mx;
+      my = my;
+      mz = mz;
     }
     
     
@@ -143,10 +146,10 @@ void setup() {
   IMU.begin();
 
   delay(5000);
-  float ax, ay, az;
-  float buffer_ax=0;
-  float buffer_ay=0;
-  float buffer_az=0;
+  float ax, ay, az, gx, gy, gz;
+  float buffer_ax=0; float buffer_ay=0; float buffer_az=0;
+  
+  float buffer_gx=0; float buffer_gy=0; float buffer_gz=0;
   for(int i=0;i<10000;i++){
     if(IMU.accelerationAvailable())
     {
@@ -155,15 +158,29 @@ void setup() {
       ay = ay*9.81;
       az = az*9.81;
     }
+    if(IMU.gyroscopeAvailable())
+    {
+      IMU.readGyroscope(gx, gy, gz);
+      gx = gx*3.142/180;
+      gy = gy*3.142/180;
+      gz = gz*3.142/180;
+    }
     buffer_ax +=  ax;
     buffer_ay +=  ay;
     buffer_az +=  az;
+    buffer_gx +=  gx;
+    buffer_gy +=  gy;
+    buffer_gz +=  gz;
     delay(1);
   }
   
   calib_ax = 0.0-buffer_ax/10000;
   calib_ay = 0.0-buffer_ay/10000;
   calib_az = 9.81-buffer_az/10000;
+
+  calib_gx = 0.0-buffer_gx/10000;
+  calib_gy = 0.0-buffer_gy/10000;
+  calib_gz = 0.0-buffer_gz/10000;
 
 //  if(calib_ax > 20){calib_ax = 0;}
 //  if(calib_ay > 20){calib_ay = 0;}
@@ -194,17 +211,14 @@ void setup() {
   ///////////////////////////////////////////////////////////////////////////////////////////////////
   allocator = rcl_get_default_allocator();
 
-  static int buttons_memory[14];
-  joy_msg.buttons.capacity = 14;
-  joy_msg.buttons.data = buttons_memory;
+//  static int32_t buttons_memory[14];
+//  joy_msg.buttons.capacity = 14;
+//  joy_msg.buttons.data = buttons_memory;
+//
+//  static float axes_memory[8];
+//  joy_msg.axes.capacity = axes_memory;
+//  joy_msg.axes.data = axes_memory;
 
-  static float axes_memory[8];
-  joy_msg.axes.capacity = axes_memory;
-  joy_msg.axes.data = axes_memory;
-//  debagc = 'a';
-//  
-//  Serial.println("a");
-  
   // create init_options
   RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
 //  debagc = 'b';
