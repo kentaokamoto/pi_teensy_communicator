@@ -53,42 +53,59 @@ rcl_timer_t timer;
 
 sensor_msgs__msg__Imu msg_imu;
 sensor_msgs__msg__MagneticField msg_mag;
+
 sensor_msgs__msg__Joy joy_msg;
 std_msgs__msg__Float32MultiArray pwm_msg;
 
 //char debagc;
 void error_loop(){
   while(1){
-    Serial.println("error");
-//    Serial.println(debagc);
-    
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     delay(100);
   }
 }
 
-void motor_callback(const void * msgin)
+void joy_callback(const void * msgin)
 {
   const sensor_msgs__msg__Joy * msg = (const sensor_msgs__msg__Joy *)msgin;
-  if((msg->buttons.data[1])== 1){
-     motor_flag = false;
+  static int32_t buttons_memory[13];
+  joy_msg.buttons.capacity = 26;
+  joy_msg.buttons.data = buttons_memory;
+  joy_msg.buttons.size = 13;
+  
+  static float axes_memory[6];
+  joy_msg.axes.capacity = 24;
+  joy_msg.axes.data = axes_memory;
+  joy_msg.axes.size = 6;
+  
+  if(msg == NULL){ }else{
+    if((msg->buttons.data[1])== 1){
+      motor_flag = false;
     }
-  if((msg->buttons.data[2])== 1){
-     motor_flag = true;
+    if((msg->buttons.data[2])== 1){
+      motor_flag = true;
     }
+  }
 }
 
 void pwm_callback(const void * msgin)
 {
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
-  pwm_0 = msg->data.data[0];
-  pwm_1 = msg->data.data[1];
-  pwm_2 = msg->data.data[2];
-  pwm_3 = msg->data.data[3];
+  static float pwm_memory[4];
+  pwm_msg.data.capacity = 20;
+  pwm_msg.data.data = pwm_memory;
+  pwm_msg.data.size = 4;
+  if(msg==NULL){ }else{
+    pwm_0 = msg->data.data[0];
+    pwm_1 = msg->data.data[1];
+    pwm_2 = msg->data.data[2];
+    pwm_3 = msg->data.data[3];
+  }
 }
 
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {  
+  Serial.println("debagc");
   if(motor_flag){
     analogWrite(MOTOR0_PIN, pwm_0*pwmbit);
     analogWrite(MOTOR1_PIN, pwm_1*pwmbit);
@@ -100,7 +117,7 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     analogWrite(MOTOR2_PIN, 0*pwmbit);
     analogWrite(MOTOR3_PIN, 0*pwmbit);
   }
-
+  
   float ax, ay, az, gx, gy, gz, mx, my, mz;
   RCLC_UNUSED(last_call_time);
   if (timer != NULL){
@@ -128,8 +145,7 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
       my = my;
       mz = mz;
     }
-    
-    
+    Serial.println("debage");
     msg_imu.linear_acceleration.x = ax;
     msg_imu.linear_acceleration.y = ay;
     msg_imu.linear_acceleration.z = az;
@@ -142,7 +158,7 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     msg_mag.magnetic_field.x = mx;
     msg_mag.magnetic_field.y = my;
     msg_mag.magnetic_field.z = mz;
-
+    Serial.println("debagf");
     RCSOFTCHECK(rcl_publish(&publisher_imu, (const void *) &msg_imu, NULL));
     RCSOFTCHECK(rcl_publish(&publisher_mag, (const void *) &msg_mag, NULL));
   }
@@ -184,7 +200,7 @@ void setup() {
     buffer_gx +=  gx;
     buffer_gy +=  gy;
     buffer_gz +=  gz;
-    delay(1);
+    delay(0.1);
   }
   
   calib_ax = 0.0-buffer_ax/10000;
@@ -198,7 +214,6 @@ void setup() {
 //  if(calib_ax > 20){calib_ax = 0;}
 //  if(calib_ay > 20){calib_ay = 0;}
 //  if(calib_az > 20){calib_az = 0;}
-  
   
   delay(3000);
   analogWriteResolution(12);
@@ -223,24 +238,14 @@ void setup() {
   ////////////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////////////////////
   allocator = rcl_get_default_allocator();
-
-//  static int32_t buttons_memory[14];
-//  joy_msg.buttons.capacity = 14;
-//  joy_msg.buttons.data = buttons_memory;
-//
-//  static float axes_memory[8];
-//  joy_msg.axes.capacity = axes_memory;
-//  joy_msg.axes.data = axes_memory;
+  
 
   // create init_options
   RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
-//  debagc = 'b';
-//  Serial.println("b");
   
   // create node
   RCCHECK(rclc_node_init_default(&node, "pi_esp_communicator", "", &support));
-//  Serial.println("c");
-//  debagc = 'c';
+
   // create publisher
   RCCHECK(rclc_publisher_init_default(
     &publisher_imu,
@@ -248,8 +253,6 @@ void setup() {
     ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
     "/copto/imu"));
     
-//  Serial.println("d");
-//  debagc = 'd';
   RCCHECK(rclc_publisher_init_default(
     &publisher_mag,
     &node,
@@ -272,8 +275,6 @@ void setup() {
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
     "/copto/pwm"));
 
-//  Serial.println("e");
-//  debagc = 'e';
   // create timer,
   const unsigned int timer_timeout = 10;
   RCCHECK(rclc_timer_init_default(
@@ -286,14 +287,22 @@ void setup() {
 //  Serial.println("f");
   // create executor
   executor = rclc_executor_get_zero_initialized_executor();
-  RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
+  RCCHECK(rclc_executor_init(&executor, &support.context, 3, &allocator));
   RCCHECK(rclc_executor_add_timer(&executor, &timer));
-  RCCHECK(rclc_executor_add_subscription(&executor, &joy_subscriber, &joy_msg, &motor_callback, ON_NEW_DATA));  
+  RCCHECK(rclc_executor_add_subscription(&executor, &joy_subscriber, &joy_msg, &joy_callback, ON_NEW_DATA));  
   RCCHECK(rclc_executor_add_subscription(&executor, &pwm_subscriber, &pwm_msg, &pwm_callback, ON_NEW_DATA));  
 }
 
 void loop() {
   RCSOFTCHECK(rclc_executor_spin(&executor));
-//  Serial.println("c");
-  //analogWrite(MOTOR0_PIN, 1100*pwmbit);
+
+//  rclc_exector_fini(&executor);
+//  rcl_publisher_fini(&publisher_imu, &node);
+//  rcl_timer_fini(&timer);
+//  rcl_subscription_fini(&joy_subscriber,&node);
+//  rcl_subscription_fini(&pwm_subscriber,&node);
+//  rcl_node_fini(&node);
+//  rclc_support_fini(&support);
+//  sensor_msgs__msg__Joy__fini(&joy_msg);
+//  std_msgs__msg__Float32MultiArray__fini(&pwm_msg);
 }
