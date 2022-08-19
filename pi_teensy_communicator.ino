@@ -68,44 +68,27 @@ void error_loop(){
 void joy_callback(const void * msgin)
 {
   const sensor_msgs__msg__Joy * msg = (const sensor_msgs__msg__Joy *)msgin;
-  static int32_t buttons_memory[13];
-  joy_msg.buttons.capacity = 26;
-  joy_msg.buttons.data = buttons_memory;
-  joy_msg.buttons.size = 13;
-  
-  static float axes_memory[6];
-  joy_msg.axes.capacity = 24;
-  joy_msg.axes.data = axes_memory;
-  joy_msg.axes.size = 6;
-  
-  if(msg == NULL){ }else{
     if((msg->buttons.data[1])== 1){
       motor_flag = false;
     }
     if((msg->buttons.data[2])== 1){
       motor_flag = true;
     }
-  }
+  
 }
 
 void pwm_callback(const void * msgin)
 {
   const std_msgs__msg__Float32MultiArray * msg = (const std_msgs__msg__Float32MultiArray *)msgin;
-  static float pwm_memory[4];
-  pwm_msg.data.capacity = 20;
-  pwm_msg.data.data = pwm_memory;
-  pwm_msg.data.size = 4;
-  if(msg==NULL){ }else{
     pwm_0 = msg->data.data[0];
     pwm_1 = msg->data.data[1];
     pwm_2 = msg->data.data[2];
     pwm_3 = msg->data.data[3];
-  }
 }
 
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {  
-  Serial.println("debagc");
+ 
   if(motor_flag){
     analogWrite(MOTOR0_PIN, pwm_0*pwmbit);
     analogWrite(MOTOR1_PIN, pwm_1*pwmbit);
@@ -145,7 +128,6 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
       my = my;
       mz = mz;
     }
-    Serial.println("debage");
     msg_imu.linear_acceleration.x = ax;
     msg_imu.linear_acceleration.y = ay;
     msg_imu.linear_acceleration.z = az;
@@ -158,7 +140,7 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     msg_mag.magnetic_field.x = mx;
     msg_mag.magnetic_field.y = my;
     msg_mag.magnetic_field.z = mz;
-    Serial.println("debagf");
+  
     RCSOFTCHECK(rcl_publish(&publisher_imu, (const void *) &msg_imu, NULL));
     RCSOFTCHECK(rcl_publish(&publisher_mag, (const void *) &msg_mag, NULL));
   }
@@ -238,6 +220,21 @@ void setup() {
   ////////////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////////////////////
   allocator = rcl_get_default_allocator();
+
+  static float pwm_memory[4];
+  pwm_msg.data.capacity = 20;
+  pwm_msg.data.data = pwm_memory;
+  pwm_msg.data.size = 4;
+
+  static int32_t buttons_memory[13];
+  joy_msg.buttons.capacity = 26;
+  joy_msg.buttons.data = buttons_memory;
+  joy_msg.buttons.size = 13;
+  
+  static float axes_memory[6];
+  joy_msg.axes.capacity = 24;
+  joy_msg.axes.data = axes_memory;
+  joy_msg.axes.size = 6;
   
 
   // create init_options
